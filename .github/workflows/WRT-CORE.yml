@@ -1,0 +1,460 @@
+# SPDX-License-Identifier: MIT
+# ZNM2 LiBwrt CI Core Workflow
+
+name: WRT-CORE
+
+on:
+  workflow_call:
+    inputs:
+      WRT_CONFIG:
+        required: true
+        type: string
+      WRT_THEME:
+        required: true
+        type: string
+      WRT_NAME:
+        required: true
+        type: string
+      WRT_SSID:
+        required: true
+        type: string
+      WRT_WORD:
+        required: true
+        type: string
+      WRT_IP:
+        required: true
+        type: string
+      WRT_PW:
+        required: true
+        type: string
+      WRT_REPO:
+        required: true
+        type: string
+      WRT_BRANCH:
+        required: true
+        type: string
+      WRT_SOURCE:
+        required: true
+        type: string
+      WRT_PACKAGE:
+        required: false
+        type: string
+        default: ""
+      WRT_TEST:
+        required: false
+        type: string
+        default: "false"
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  WRT_CONFIG: ${{ inputs.WRT_CONFIG }}
+  WRT_THEME: ${{ inputs.WRT_THEME }}
+  WRT_NAME: ${{ inputs.WRT_NAME }}
+  WRT_SSID: ${{ inputs.WRT_SSID }}
+  WRT_WORD: ${{ inputs.WRT_WORD }}
+  WRT_IP: ${{ inputs.WRT_IP }}
+  WRT_PW: ${{ inputs.WRT_PW }}
+  WRT_REPO: ${{ inputs.WRT_REPO }}
+  WRT_BRANCH: ${{ inputs.WRT_BRANCH }}
+  WRT_SOURCE: ${{ inputs.WRT_SOURCE }}
+  WRT_PACKAGE: ${{ inputs.WRT_PACKAGE }}
+  WRT_TEST: ${{ inputs.WRT_TEST }}
+
+jobs:
+  core:
+    name: ${{ inputs.WRT_SOURCE }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Projects
+        uses: actions/checkout@v4
+
+      - name: Initialization Environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo -E apt-get -yqq update
+          sudo -E apt-get -yqq install dos2unix libfuse-dev curl wget git jq
+
+          sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+
+          sudo -E timedatectl set-timezone "Asia/Shanghai"
+
+          sudo mkdir -p /mnt/build_wrt
+          sudo chown "$USER:$USER" /mnt/build_wrt
+
+          rm -rf "$GITHUB_WORKSPACE/wrt"
+          sudo ln -s /mnt/build_wrt "$GITHUB_WORKSPACE/wrt"
+
+      - name: Initialization Values
+        run: |
+          echo "WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d-%H.%M.%S")" >> "$GITHUB_ENV"
+          echo "WRT_MARK=${GITHUB_REPOSITORY%%/*}" >> "$GITHUB_ENV"
+          echo "WRT_INFO=${WRT_SOURCE%%/*}" >> "$GITHUB_ENV"
+
+          if [ -f "./Config/$WRT_CONFIG.txt" ]; then
+            TARGET_NAME="$(grep -m 1 -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' "./Config/$WRT_CONFIG.txt" || true)"
+            echo "WRT_TARGET=${TARGET_NAME:-unknown}" >> "$GITHUB_ENV"
+          else
+            echo "WRT_TARGET=unknown" >> "$GITHUB_ENV"
+          fi
+
+          echo "WRT_WIFI=wifi-yes" >> "$GITHUB_ENV"
+          echo "WRT_KVER=none" >> "$GITHUB_ENV"
+          echo "WRT_LIST=none" >> "$GITHUB_ENV"
+
+      - name: Clone Code
+        run: |
+          echo "==== Clone OpenWrt Source ===="
+          git clone --depth=1 --single-branch --branch "$WRT_BRANCH" "$WRT_REPO" ./wrt/
+
+          cd ./wrt/
+          echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> "$GITHUB_ENV"
+
+          PROJECT_MIRRORS_FILE="./scripts/projectsmirrors.json"
+          if [ -f "$PROJECT_MIRRORS_FILE" ]; then
+            sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$PROJECT_MIRRORS_FILE"
+          fi
+
+      - name: Check Scripts
+        run: |
+          echo "==== Convert scripts to Unix format ===="
+          find ./ -maxdepth 5 -type f -iregex ".*\(txt\|sh\|json\|css\|js\|htm\|lua\)$" -exec dos2unix {} \; || true
+          find ./ -maxdepth 5 -type f -iregex ".*\(sh\)$" -exec chmod +x {} \; || true
+
+      - name: Check Caches
+        id: check-cache
+        if: env.WRT_TEST != 'true'
+        uses: actions/cache@v4
+        with:
+          key: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-${{ env.WRT_HASH }}
+          restore-keys: |
+            ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}
+          path: |
+            ./wrt/.ccache
+            ./wrt/staging_dir/host*
+            ./wrt/staging_dir/tool*
+
+      - name: Update Caches
+        if: env.WRT_TEST != 'true'
+        run: |
+          echo "==== Update caches ===="
+          if [ -d "./wrt/staging_dir" ]; then
+            find "./wrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r DIR; do
+              find "$DIR" -type f -exec touch {} +
+            done
+
+            mkdir -p ./wrt/tmp
+            echo "1" > ./wrt/tmp/.build
+            echo "toolchain skipped done!"
+          else
+            echo "caches missed!"
+          fi
+
+          if [ "${{ steps.check-cache.outputs.cache-hit }}" != "true" ]; then
+            CACHE_LIST=$(gh cache list --key "$WRT_CONFIG-$WRT_INFO" | cut -f 1 || true)
+            for CACHE_KEY in $CACHE_LIST; do
+              gh cache delete "$CACHE_KEY" || true
+            done
+            echo "caches cleanup done!"
+          fi
+
+      - name: Copy Custom Files
+        run: |
+          echo "==== Copy custom files into OpenWrt rootfs overlay ===="
+
+          if [ -d "$GITHUB_WORKSPACE/files" ]; then
+            mkdir -p "$GITHUB_WORKSPACE/wrt/files"
+            cp -af "$GITHUB_WORKSPACE/files/." "$GITHUB_WORKSPACE/wrt/files/"
+            echo "Root files directory copied."
+          else
+            echo "No root files directory found. Continue."
+          fi
+
+          echo "==== Create M2 Aurora LuCI menu file ===="
+          mkdir -p "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d"
+
+          cat > "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d/m2-aurora-home.json" <<'MENUJSON'
+          {
+            "admin/status/m2aurora": {
+              "title": "首页",
+              "order": -100,
+              "action": {
+                "type": "template",
+                "path": "m2more/aurora"
+              },
+              "depends": {
+                "fs": {
+                  "/usr/lib/lua/luci/view/m2more/aurora.htm": "file"
+                }
+              }
+            },
+            "admin/status/overview": {
+              "title": "概览",
+              "order": 100,
+              "action": {
+                "type": "template",
+                "path": "m2more/redirect_to_m2aurora"
+              },
+              "depends": {
+                "fs": {
+                  "/usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm": "file"
+                }
+              }
+            }
+          }
+          MENUJSON
+
+          echo "==== Create redirect page ===="
+          mkdir -p "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more"
+
+          cat > "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm" <<'REDIRECT'
+          <%+header%>
+          <script>
+          (function () {
+              var target = "<%=url('admin/status/m2aurora')%>";
+              window.location.replace(target);
+          })();
+          </script>
+          <div style="padding:30px;font-size:16px;">正在进入首页...</div>
+          <%+footer%>
+          REDIRECT
+
+          echo "==== Create M2 Aurora default home script ===="
+          mkdir -p "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults"
+
+          cat > "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home" <<'UCIDEFAULT'
+          #!/bin/sh
+
+          echo "==== Set M2 Aurora as LuCI default home ===="
+
+          uci -q set luci.main.mediaurlbase='/luci-static/m2aurora'
+          uci -q commit luci
+
+          CTRL_FILE="/usr/lib/lua/luci/controller/admin/m2more.lua"
+          if [ -f "$CTRL_FILE" ]; then
+              sed -i 's/M2 Aurora 首页/首页/g' "$CTRL_FILE"
+          fi
+
+          MENU_DIR="/usr/share/luci/menu.d"
+          BASE_JSON="$MENU_DIR/luci-base.json"
+
+          mkdir -p "$MENU_DIR"
+
+          cat > "$MENU_DIR/m2-aurora-home.json" <<'MENUJSON'
+          {
+            "admin/status/m2aurora": {
+              "title": "首页",
+              "order": -100,
+              "action": {
+                "type": "template",
+                "path": "m2more/aurora"
+              },
+              "depends": {
+                "fs": {
+                  "/usr/lib/lua/luci/view/m2more/aurora.htm": "file"
+                }
+              }
+            },
+            "admin/status/overview": {
+              "title": "概览",
+              "order": 100,
+              "action": {
+                "type": "template",
+                "path": "m2more/redirect_to_m2aurora"
+              },
+              "depends": {
+                "fs": {
+                  "/usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm": "file"
+                }
+              }
+            }
+          }
+          MENUJSON
+
+          mkdir -p /usr/lib/lua/luci/view/m2more
+
+          cat > /usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm <<'REDIRECT'
+          <%+header%>
+          <script>
+          (function () {
+              var target = "<%=url('admin/status/m2aurora')%>";
+              window.location.replace(target);
+          })();
+          </script>
+          <div style="padding:30px;font-size:16px;">正在进入首页...</div>
+          <%+footer%>
+          REDIRECT
+
+          if [ -f "$BASE_JSON" ]; then
+              sed -i 's#admin/status/overview#admin/status/m2aurora#g' "$BASE_JSON"
+          fi
+
+          INDEX_LUA="/usr/lib/lua/luci/controller/admin/index.lua"
+          if [ -f "$INDEX_LUA" ]; then
+              sed -i 's/alias("admin", "status", "overview")/alias("admin", "status", "m2aurora")/g' "$INDEX_LUA"
+              sed -i "s/alias('admin', 'status', 'overview')/alias('admin', 'status', 'm2aurora')/g" "$INDEX_LUA"
+              sed -i 's/firstchild()/alias("admin", "status", "m2aurora")/g' "$INDEX_LUA"
+          fi
+
+          rm -rf /tmp/luci-indexcache /tmp/luci-modulecache /tmp/luci-indexcache.* /tmp/luci-modulecache.* /tmp/luci-*cache* 2>/dev/null || true
+
+          exit 0
+          UCIDEFAULT
+
+          chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home"
+          chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/"* 2>/dev/null || true
+          chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/init.d/"* 2>/dev/null || true
+
+          echo "==== Custom files copied / generated ===="
+          find "$GITHUB_WORKSPACE/wrt/files" -maxdepth 8 -type f | sort | grep -E 'm2more|m2-aurora|uci-defaults|luci-static' || true
+
+          echo "==== Check M2 Aurora important files ===="
+          ls -l "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/controller/admin/m2more.lua" 2>/dev/null || true
+          ls -l "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/aurora.htm" 2>/dev/null || true
+          ls -l "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm" 2>/dev/null || true
+          ls -l "$GITHUB_WORKSPACE/wrt/files/www/luci-static/m2more/" 2>/dev/null || true
+          ls -l "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d/m2-aurora-home.json" 2>/dev/null || true
+          ls -l "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home" 2>/dev/null || true
+
+      - name: Update Feeds
+        run: |
+          cd ./wrt/
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Custom Packages
+        run: |
+          cd ./wrt/package/
+
+          echo "==== Fix script permissions ===="
+          chmod +x "$GITHUB_WORKSPACE/Scripts/"*.sh 2>/dev/null || true
+
+          if [ -f "$GITHUB_WORKSPACE/Scripts/Packages.sh" ]; then
+            "$GITHUB_WORKSPACE/Scripts/Packages.sh"
+          fi
+
+          if [ -f "$GITHUB_WORKSPACE/Scripts/Handles.sh" ]; then
+            "$GITHUB_WORKSPACE/Scripts/Handles.sh"
+          fi
+
+          if [ -f "$GITHUB_WORKSPACE/Scripts/Add_M2Aurora_Theme.sh" ]; then
+            "$GITHUB_WORKSPACE/Scripts/Add_M2Aurora_Theme.sh"
+          fi
+
+      - name: Custom Settings
+        run: |
+          cd ./wrt/
+
+          if [[ "${WRT_CONFIG,,}" == *"test"* ]]; then
+            cat "$GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt" >> .config
+          else
+            cat "$GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt" "$GITHUB_WORKSPACE/Config/GENERAL.txt" >> .config
+          fi
+
+          if [ -f "$GITHUB_WORKSPACE/Scripts/Settings.sh" ]; then
+            "$GITHUB_WORKSPACE/Scripts/Settings.sh"
+          fi
+
+          echo "==== Ensure LuCI and M2 Aurora theme ===="
+          {
+            echo "CONFIG_PACKAGE_luci=y"
+            echo "CONFIG_PACKAGE_luci-compat=y"
+            echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y"
+            echo "CONFIG_PACKAGE_luci-theme-aurora=y"
+            echo "CONFIG_PACKAGE_luci-theme-m2aurora=y"
+          } >> .config
+
+          make defconfig -j$(nproc)
+          make clean -j$(nproc)
+
+      - name: Verify Custom Files Before Build
+        run: |
+          echo "==== Verify wrt/files before build ===="
+          find ./wrt/files -maxdepth 8 -type f | sort | grep -E 'm2more|m2-aurora|uci-defaults|luci-static' || true
+
+          echo "==== Verify custom theme files ===="
+          find ./wrt/package/custom/luci-theme-m2aurora -maxdepth 8 -type f | sort || true
+
+          echo "==== Verify LuCI config ===="
+          cd ./wrt/
+          grep -E 'CONFIG_PACKAGE_luci=|CONFIG_PACKAGE_luci-compat=|CONFIG_PACKAGE_luci-i18n-base-zh-cn=|CONFIG_PACKAGE_luci-theme-aurora=|CONFIG_PACKAGE_luci-theme-m2aurora=' .config || true
+
+      - name: Download Packages
+        if: env.WRT_TEST != 'true'
+        run: |
+          cd ./wrt/
+          make download -j$(nproc)
+
+      - name: Compile Firmware
+        if: env.WRT_TEST != 'true'
+        run: |
+          cd ./wrt/
+          make -j$(nproc) || make -j1 V=s
+
+      - name: Machine Information
+        run: |
+          cd ./wrt/
+          echo "======================="
+          lscpu | grep -E "name|Core|Thread" || true
+          echo "======================="
+          df -h
+          echo "======================="
+          du -h --max-depth=1
+          echo "======================="
+
+      - name: Package Firmware
+        run: |
+          cd ./wrt/
+          mkdir -p ./upload/
+
+          cp -f ./.config ./upload/Config-"$WRT_CONFIG"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
+
+          if [[ "$WRT_TEST" != 'true' ]]; then
+            KVER="$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \; | head -n1 || true)"
+            LIST="$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^luci-(app|theme)[^ ]*' {} \; | tr '\n' ' ' || true)"
+
+            echo "WRT_KVER=${KVER:-none}" >> "$GITHUB_ENV"
+            echo "WRT_LIST=${LIST:-none}" >> "$GITHUB_ENV"
+
+            find ./bin/targets/ -iregex ".*\(buildinfo\|json\|sha256sums\|packages\)$" -exec rm -rf {} + || true
+
+            for FILE in $(find ./bin/targets/ -type f -iname "*$WRT_TARGET*" || true); do
+              EXT=$(basename "$FILE" | cut -d '.' -f 2-)
+              NAME=$(basename "$FILE" | cut -d '.' -f 1 | grep -io "\($WRT_TARGET\).*" || true)
+
+              if [ -n "$NAME" ]; then
+                NEW_FILE="$WRT_INFO"-"$WRT_BRANCH"-"$NAME"-"$WRT_DATE"."$EXT"
+                mv -f "$FILE" ./upload/"$NEW_FILE"
+              fi
+            done
+
+            find ./bin/targets/ -type f -exec mv -f {} ./upload/ \; || true
+            make clean -j$(nproc)
+          fi
+
+      - name: Release Firmware
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-${{ env.WRT_BRANCH }}-${{ env.WRT_DATE }}
+          files: ./wrt/upload/*.*
+          body: |
+            这是个平台固件包，内含多个设备！
+            请注意选择你需要的设备固件！
+
+            源码：${{ env.WRT_REPO }}
+            分支：${{ env.WRT_BRANCH }}
+            提交：${{ env.WRT_HASH }}
+            配置：${{ env.WRT_CONFIG }}
+            平台：${{ env.WRT_TARGET }}
+            登录地址：${{ env.WRT_IP }}
+            登录密码：${{ env.WRT_PW }}
+            WIFI名称：${{ env.WRT_SSID }}
+            WIFI密码：${{ env.WRT_WORD }}
+            内核版本：${{ env.WRT_KVER }}
+            插件列表：${{ env.WRT_LIST }}
