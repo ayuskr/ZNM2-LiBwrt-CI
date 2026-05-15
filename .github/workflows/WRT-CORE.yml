@@ -232,7 +232,7 @@ REDIRECT
 
 echo "==== Set M2 Aurora as LuCI default home ===="
 
-uci -q set luci.main.mediaurlbase='/luci-static/aurora'
+uci -q set luci.main.mediaurlbase='/luci-static/m2aurora'
 uci -q commit luci
 
 CTRL_FILE="/usr/lib/lua/luci/controller/admin/m2more.lua"
@@ -331,12 +331,19 @@ UCIDEFAULT
         run: |
           cd ./wrt/package/
 
+          echo "==== Fix script permissions ===="
+          chmod +x "$GITHUB_WORKSPACE/Scripts/"*.sh 2>/dev/null || true
+
           if [ -f "$GITHUB_WORKSPACE/Scripts/Packages.sh" ]; then
             "$GITHUB_WORKSPACE/Scripts/Packages.sh"
           fi
 
           if [ -f "$GITHUB_WORKSPACE/Scripts/Handles.sh" ]; then
             "$GITHUB_WORKSPACE/Scripts/Handles.sh"
+          fi
+
+          if [ -f "$GITHUB_WORKSPACE/Scripts/Add_M2Aurora_Theme.sh" ]; then
+            "$GITHUB_WORKSPACE/Scripts/Add_M2Aurora_Theme.sh"
           fi
 
       - name: Custom Settings
@@ -353,12 +360,13 @@ UCIDEFAULT
             "$GITHUB_WORKSPACE/Scripts/Settings.sh"
           fi
 
-          echo "==== Ensure LuCI Aurora dashboard requirements ===="
+          echo "==== Ensure LuCI and M2 Aurora theme ===="
           {
             echo "CONFIG_PACKAGE_luci=y"
             echo "CONFIG_PACKAGE_luci-compat=y"
             echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y"
             echo "CONFIG_PACKAGE_luci-theme-aurora=y"
+            echo "CONFIG_PACKAGE_luci-theme-m2aurora=y"
           } >> .config
 
           make defconfig -j$(nproc)
@@ -369,9 +377,12 @@ UCIDEFAULT
           echo "==== Verify wrt/files before build ===="
           find ./wrt/files -maxdepth 8 -type f | sort | grep -E 'm2more|m2-aurora|uci-defaults|luci-static' || true
 
+          echo "==== Verify custom theme files ===="
+          find ./wrt/package/custom/luci-theme-m2aurora -maxdepth 8 -type f | sort || true
+
           echo "==== Verify LuCI config ===="
           cd ./wrt/
-          grep -E 'CONFIG_PACKAGE_luci=|CONFIG_PACKAGE_luci-compat=|CONFIG_PACKAGE_luci-i18n-base-zh-cn=|CONFIG_PACKAGE_luci-theme-aurora=' .config || true
+          grep -E 'CONFIG_PACKAGE_luci=|CONFIG_PACKAGE_luci-compat=|CONFIG_PACKAGE_luci-i18n-base-zh-cn=|CONFIG_PACKAGE_luci-theme-aurora=|CONFIG_PACKAGE_luci-theme-m2aurora=' .config || true
 
       - name: Download Packages
         if: env.WRT_TEST != 'true'
