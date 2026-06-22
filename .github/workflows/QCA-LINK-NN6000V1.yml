@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MIT
+name: QCA-LINK-NN6000V1
+
+on:
+  workflow_dispatch:
+    inputs:
+      PACKAGE:
+        description: '手动追加/覆盖插件包配置，多行写入，例如 CONFIG_PACKAGE_xxx=y'
+        required: false
+        type: string
+      TEST:
+        description: '仅输出配置文件，不编译固件'
+        default: 'false'
+        required: false
+        type: boolean
+
+permissions: write-all
+
+jobs:
+  config:
+    name: IPQ60XX-LINK-NN6000V1-NSS-USB-NOWIFI
+    uses: ./.github/workflows/WRT-CORE.yml
+    with:
+      WRT_CONFIG: IPQ60XX-LINK-NN6000V1-NSS-USB-NOWIFI
+      WRT_THEME: bootstrap
+      WRT_NAME: Link-NN6000V1
+      WRT_SSID: Link-NN6000V1
+      WRT_WORD: 12345678
+      WRT_IP: 192.168.50.1
+      WRT_PW: 无
+      WRT_REPO: https://github.com/LiBwrt/openwrt-6.x.git
+      WRT_BRANCH: 25.12-nss
+      WRT_SOURCE: LiBwrt/openwrt-6.x
+      WRT_PACKAGE: ${{ inputs.PACKAGE }}
+      WRT_TEST: ${{ inputs.TEST }}
