@@ -1,0 +1,180 @@
+# SPDX-License-Identifier: MIT
+#
+# link_nn6000-v1 / IPQ60XX / NSS / USB / No WiFi / Main Router
+# Put this file at:
+#   Config/IPQ60XX-LINK-NN6000V1-NSS-USB-NOWIFI.txt
+#
+# Recommended source:
+#   LiBwrt/openwrt-6.x
+# Recommended branch:
+#   25.12-nss
+
+# ===== Target platform =====
+CONFIG_TARGET_qualcommax=y
+CONFIG_TARGET_qualcommax_ipq60xx=y
+CONFIG_TARGET_DEVICE_qualcommax_ipq60xx_DEVICE_link_nn6000-v1=y
+
+# Single-device build; avoid producing unrelated images.
+CONFIG_TARGET_MULTI_PROFILE=n
+CONFIG_TARGET_PER_DEVICE_ROOTFS=y
+CONFIG_TARGET_ROOTFS_INITRAMFS=n
+
+# ===== No WiFi =====
+CONFIG_PACKAGE_kmod-ath=n
+CONFIG_PACKAGE_kmod-ath11k=n
+CONFIG_PACKAGE_kmod-ath11k-ahb=n
+CONFIG_PACKAGE_kmod-ath11k-pci=n
+CONFIG_PACKAGE_ath11k-firmware-ipq6018=n
+CONFIG_PACKAGE_ath11k-firmware-ipq6018-ddwrt=n
+CONFIG_PACKAGE_ath11k-firmware-qcn9074=n
+CONFIG_PACKAGE_ath11k-firmware-qcn9074-ddwrt=n
+CONFIG_PACKAGE_kmod-cfg80211=n
+CONFIG_PACKAGE_kmod-mac80211=n
+CONFIG_PACKAGE_hostapd-common=n
+CONFIG_PACKAGE_wpad-basic-mbedtls=n
+CONFIG_PACKAGE_wpad-openssl=n
+CONFIG_PACKAGE_wpad-wolfssl=n
+CONFIG_PACKAGE_iw=n
+CONFIG_PACKAGE_wireless-regdb=n
+CONFIG_PACKAGE_luci-proto-wireless=n
+
+# ===== NSS acceleration for main router use =====
+CONFIG_NSS_FIRMWARE_VERSION_11_4=y
+CONFIG_NSS_FIRMWARE_VERSION_12_5=n
+CONFIG_PACKAGE_kmod-qca-nss-drv=y
+CONFIG_PACKAGE_kmod-qca-nss-ecm=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-bridge-mgr=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-vlan-mgr=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-pppoe=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-qdisc=y
+CONFIG_PACKAGE_kmod-qca-nss-drv-igs=y
+CONFIG_PACKAGE_sqm-scripts-nss=y
+
+# Keep software flow offload modules as fallback / firewall4 support.
+CONFIG_PACKAGE_kmod-nft-core=y
+CONFIG_PACKAGE_kmod-nft-nat=y
+CONFIG_PACKAGE_kmod-nft-offload=y
+CONFIG_PACKAGE_kmod-nft-fullcone=y
+CONFIG_PACKAGE_kmod-nft-tproxy=y
+CONFIG_PACKAGE_kmod-tun=y
+
+# ===== Main router basics =====
+CONFIG_PACKAGE_ppp=y
+CONFIG_PACKAGE_ppp-mod-pppoe=y
+CONFIG_PACKAGE_ip-full=y
+CONFIG_PACKAGE_curl=y
+CONFIG_PACKAGE_ca-bundle=y
+CONFIG_PACKAGE_ca-certificates=y
+CONFIG_PACKAGE_openssl-util=y
+CONFIG_PACKAGE_htop=y
+CONFIG_PACKAGE_dnsmasq=n
+CONFIG_PACKAGE_dnsmasq-full=y
+CONFIG_PACKAGE_dnsmasq_full_ipset=y
+CONFIG_PACKAGE_dnsmasq_full_nftset=y
+CONFIG_PACKAGE_dnsmasq_full_conntrack=y
+
+# ===== USB support: storage + USB Ethernet / tethering / modem basics =====
+CONFIG_PACKAGE_kmod-usb-core=y
+CONFIG_PACKAGE_kmod-usb2=y
+CONFIG_PACKAGE_kmod-usb3=y
+CONFIG_PACKAGE_kmod-usb-dwc3=y
+CONFIG_PACKAGE_kmod-usb-dwc3-qcom=y
+CONFIG_PACKAGE_kmod-usb-xhci-hcd=y
+CONFIG_PACKAGE_kmod-usb-xhci-pci=y
+CONFIG_PACKAGE_kmod-usb-ohci=y
+CONFIG_PACKAGE_kmod-usb-storage=y
+CONFIG_PACKAGE_kmod-usb-storage-extras=y
+CONFIG_PACKAGE_kmod-usb-storage-uas=y
+CONFIG_PACKAGE_kmod-scsi-core=y
+CONFIG_PACKAGE_block-mount=y
+CONFIG_PACKAGE_automount=y
+CONFIG_PACKAGE_mount-utils=y
+CONFIG_PACKAGE_usbutils=y
+CONFIG_PACKAGE_usb-modeswitch=y
+CONFIG_PACKAGE_blkid=y
+CONFIG_PACKAGE_lsblk=y
+CONFIG_PACKAGE_e2fsprogs=y
+
+# Common USB disk filesystems.
+CONFIG_PACKAGE_kmod-fs-ext4=y
+CONFIG_PACKAGE_kmod-fs-exfat=y
+CONFIG_PACKAGE_kmod-fs-vfat=y
+CONFIG_PACKAGE_kmod-fs-ntfs3=y
+CONFIG_PACKAGE_kmod-nls-base=y
+CONFIG_PACKAGE_kmod-nls-cp437=y
+CONFIG_PACKAGE_kmod-nls-iso8859-1=y
+CONFIG_PACKAGE_kmod-nls-utf8=y
+
+# Common USB network adapters / tethering.
+CONFIG_PACKAGE_kmod-mii=y
+CONFIG_PACKAGE_kmod-usb-net=y
+CONFIG_PACKAGE_kmod-usb-net-asix=y
+CONFIG_PACKAGE_kmod-usb-net-asix-ax88179=y
+CONFIG_PACKAGE_kmod-usb-net-cdc-ether=y
+CONFIG_PACKAGE_kmod-usb-net-cdc-eem=y
+CONFIG_PACKAGE_kmod-usb-net-cdc-mbim=y
+CONFIG_PACKAGE_kmod-usb-net-cdc-ncm=y
+CONFIG_PACKAGE_kmod-usb-net-cdc-subset=y
+CONFIG_PACKAGE_kmod-usb-net-huawei-cdc-ncm=y
+CONFIG_PACKAGE_kmod-usb-net-ipheth=y
+CONFIG_PACKAGE_kmod-usb-net-qmi-wwan=y
+CONFIG_PACKAGE_kmod-usb-net-rndis=y
+CONFIG_PACKAGE_kmod-usb-net-rtl8150=y
+CONFIG_PACKAGE_kmod-usb-net-rtl8152=y
+CONFIG_PACKAGE_kmod-usb-serial=y
+CONFIG_PACKAGE_kmod-usb-serial-option=y
+CONFIG_PACKAGE_kmod-usb-serial-wwan=y
+CONFIG_PACKAGE_kmod-usb-wdm=y
+CONFIG_PACKAGE_libqmi=y
+CONFIG_PACKAGE_uqmi=y
+CONFIG_PACKAGE_umbim=y
+
+# ===== Required plugins =====
+CONFIG_PACKAGE_luci-app-passwall=y
+CONFIG_PACKAGE_passwall=y
+CONFIG_PACKAGE_luci-app-mosdns=y
+CONFIG_PACKAGE_mosdns=y
+CONFIG_PACKAGE_luci-app-lucky=y
+CONFIG_PACKAGE_lucky=y
+CONFIG_PACKAGE_luci-app-gecoosac=y
+CONFIG_PACKAGE_luci-app-microsocks=y
+CONFIG_PACKAGE_microsocks=y
+
+# iStore / app store
+CONFIG_PACKAGE_luci-app-store=y
+CONFIG_PACKAGE_luci-lib-taskd=y
+CONFIG_PACKAGE_luci-lib-xterm=y
+CONFIG_PACKAGE_taskd=y
+
+# ===== Docker =====
+CONFIG_PACKAGE_docker=y
+CONFIG_PACKAGE_dockerd=y
+CONFIG_PACKAGE_containerd=y
+CONFIG_PACKAGE_runc=y
+CONFIG_PACKAGE_tini=y
+CONFIG_PACKAGE_cgroupfs-mount=y
+CONFIG_PACKAGE_luci-app-dockerman=y
+CONFIG_PACKAGE_luci-i18n-dockerman-zh-cn=y
+CONFIG_PACKAGE_kmod-veth=y
+CONFIG_PACKAGE_kmod-br-netfilter=y
+CONFIG_PACKAGE_kmod-nf-conntrack-netlink=y
+CONFIG_PACKAGE_kmod-nf-ipvs=y
+CONFIG_PACKAGE_kmod-ikconfig=y
+
+# ===== LuCI =====
+CONFIG_PACKAGE_luci=y
+CONFIG_PACKAGE_luci-base=y
+CONFIG_PACKAGE_luci-compat=y
+CONFIG_PACKAGE_luci-lib-base=y
+CONFIG_PACKAGE_luci-lib-ipkg=y
+CONFIG_PACKAGE_luci-lua-runtime=y
+CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+CONFIG_PACKAGE_luci-app-opkg=y
+
+# ===== RAM helper for 512 MB-class boards =====
+CONFIG_PACKAGE_zram-swap=y
+CONFIG_PACKAGE_kmod-zram=y
+CONFIG_PACKAGE_kmod-lib-lzo=y
+CONFIG_KERNEL_ZSWAP=n
+CONFIG_PACKAGE_kmod-lib-lz4=n
+CONFIG_PACKAGE_kmod-lib-zstd=n
