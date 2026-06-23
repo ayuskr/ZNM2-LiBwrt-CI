@@ -313,3 +313,31 @@ pre {
         margin-top: 6px;
     }
 }
+
+.device-model-logo {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.device-model-logo .device-logo-letter {
+  display: inline-block;
+  line-height: 1;
+}
+
+.device-model-logo .device-logo-space {
+  display: inline-block;
+  width: 0.42em;
+  flex: 0 0 0.42em;
+}
+
+@media (max-width: 760px) {
+  .device-model-logo {
+    font-size: 24px;
+  }
+}
