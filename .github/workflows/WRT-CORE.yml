@@ -319,6 +319,12 @@ jobs:
           UCIDEFAULT
 
           chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home"
+                    if [ "$SKIP_M2AURORA_HOME" = "true" ]; then
+            echo "==== Remove M2 Aurora default home for $WRT_CONFIG / $WRT_NAME ===="
+            rm -f "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d/m2-aurora-home.json"
+            rm -f "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm"
+            rm -f "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home"
+          fi
           chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/"* 2>/dev/null || true
           chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/init.d/"* 2>/dev/null || true
 
@@ -354,10 +360,11 @@ jobs:
             "$GITHUB_WORKSPACE/Scripts/Handles.sh"
           fi
 
-          if [ -f "$GITHUB_WORKSPACE/Scripts/Add_M2Aurora_Theme.sh" ]; then
+          if [ "$SKIP_M2AURORA_HOME" = "true" ]; then
+            echo "Skip Add_M2Aurora_Theme.sh for $WRT_CONFIG / $WRT_NAME"
+          elif [ -f "$GITHUB_WORKSPACE/Scripts/Add_M2Aurora_Theme.sh" ]; then
             "$GITHUB_WORKSPACE/Scripts/Add_M2Aurora_Theme.sh"
           fi
-
       - name: Custom Settings
         run: |
           cd ./wrt/
@@ -372,13 +379,16 @@ jobs:
             "$GITHUB_WORKSPACE/Scripts/Settings.sh"
           fi
 
-          echo "==== Ensure LuCI and M2 Aurora theme ===="
+          echo "==== Ensure LuCI theme ===="
           {
             echo "CONFIG_PACKAGE_luci=y"
             echo "CONFIG_PACKAGE_luci-compat=y"
             echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y"
             echo "CONFIG_PACKAGE_luci-theme-aurora=y"
-            echo "CONFIG_PACKAGE_luci-theme-m2aurora=y"
+
+            if [ "$SKIP_M2AURORA_HOME" != "true" ]; then
+              echo "CONFIG_PACKAGE_luci-theme-m2aurora=y"
+            fi
           } >> .config
 
           make defconfig -j$(nproc)
