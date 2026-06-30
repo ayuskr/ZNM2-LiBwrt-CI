@@ -22,7 +22,7 @@ jobs:
     uses: ./.github/workflows/WRT-CORE.yml
     with:
       WRT_CONFIG: IPQ60XX-LINK-NN6000V1-NSS-USB-NOWIFI
-      WRT_THEME: bootstrap
+      WRT_THEME: aurora
       WRT_NAME: Link-NN6000V1
       WRT_SSID: Link-NN6000V1
       WRT_WORD: 12345678
