@@ -103,6 +103,18 @@ jobs:
             echo "WRT_TARGET=unknown" >> "$GITHUB_ENV"
           fi
 
+          #echo "WRT_WIFI=wifi-yes" >> "$GITHUB_ENV"
+                    MODEL_KEY="$(printf '%s|%s' "$WRT_CONFIG" "$WRT_NAME" | tr '[:upper:]' '[:lower:]' | tr -d ' _-')"
+
+          case "$MODEL_KEY" in
+            *nn600v1*|*nn6000v1*|*nn6000v2*)
+              echo "SKIP_M2AURORA_HOME=true" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "SKIP_M2AURORA_HOME=false" >> "$GITHUB_ENV"
+              ;;
+          esac
+
           echo "WRT_WIFI=wifi-yes" >> "$GITHUB_ENV"
           echo "WRT_KVER=none" >> "$GITHUB_ENV"
           echo "WRT_LIST=none" >> "$GITHUB_ENV"
