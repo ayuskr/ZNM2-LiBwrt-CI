@@ -103,8 +103,7 @@ jobs:
             echo "WRT_TARGET=unknown" >> "$GITHUB_ENV"
           fi
 
-          #echo "WRT_WIFI=wifi-yes" >> "$GITHUB_ENV"
-                    MODEL_KEY="$(printf '%s|%s' "$WRT_CONFIG" "$WRT_NAME" | tr '[:upper:]' '[:lower:]' | tr -d ' _-')"
+          MODEL_KEY="$(printf '%s|%s' "$WRT_CONFIG" "$WRT_NAME" | tr '[:upper:]' '[:lower:]' | tr -d ' _-')"
 
           case "$MODEL_KEY" in
             *nn600v1*|*nn6000v1*|*nn6000v2*)
@@ -319,12 +318,21 @@ jobs:
           UCIDEFAULT
 
           chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home"
-                    if [ "$SKIP_M2AURORA_HOME" = "true" ]; then
-            echo "==== Remove M2 Aurora default home for $WRT_CONFIG / $WRT_NAME ===="
+
+          if [ "$SKIP_M2AURORA_HOME" = "true" ]; then
+            echo "==== Remove M2 Aurora home/menu for $WRT_CONFIG / $WRT_NAME ===="
+
             rm -f "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d/m2-aurora-home.json"
             rm -f "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm"
             rm -f "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home"
+
+            find "$GITHUB_WORKSPACE/wrt/files" \
+              -type f \
+              \( -name "*m2*aurora*.json" -o -name "*aurora*home*.json" \) \
+              -print \
+              -delete 2>/dev/null || true
           fi
+
           chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/"* 2>/dev/null || true
           chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/init.d/"* 2>/dev/null || true
 
@@ -365,6 +373,7 @@ jobs:
           elif [ -f "$GITHUB_WORKSPACE/Scripts/Add_M2Aurora_Theme.sh" ]; then
             "$GITHUB_WORKSPACE/Scripts/Add_M2Aurora_Theme.sh"
           fi
+
       - name: Custom Settings
         run: |
           cd ./wrt/
