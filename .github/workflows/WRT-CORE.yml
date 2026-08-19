@@ -9,37 +9,48 @@ on:
       WRT_CONFIG:
         required: true
         type: string
+
       WRT_THEME:
         required: true
         type: string
+
       WRT_NAME:
         required: true
         type: string
+
       WRT_SSID:
         required: true
         type: string
+
       WRT_WORD:
         required: true
         type: string
+
       WRT_IP:
         required: true
         type: string
+
       WRT_PW:
         required: true
         type: string
+
       WRT_REPO:
         required: true
         type: string
+
       WRT_BRANCH:
         required: true
         type: string
+
       WRT_SOURCE:
         required: true
         type: string
+
       WRT_PACKAGE:
         required: false
         type: string
         default: ""
+
       WRT_TEST:
         required: false
         type: string
@@ -51,6 +62,7 @@ permissions:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   WRT_CONFIG: ${{ inputs.WRT_CONFIG }}
   WRT_THEME: ${{ inputs.WRT_THEME }}
   WRT_NAME: ${{ inputs.WRT_NAME }}
@@ -77,8 +89,16 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          set -e
+
           sudo -E apt-get -yqq update
-          sudo -E apt-get -yqq install dos2unix libfuse-dev curl wget git jq
+          sudo -E apt-get -yqq install \
+            dos2unix \
+            libfuse-dev \
+            curl \
+            wget \
+            git \
+            jq
 
           sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
 
@@ -92,23 +112,38 @@ jobs:
 
       - name: Initialization Values
         run: |
-          echo "WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d-%H.%M.%S")" >> "$GITHUB_ENV"
-          echo "WRT_MARK=${GITHUB_REPOSITORY%%/*}" >> "$GITHUB_ENV"
-          echo "WRT_INFO=${WRT_SOURCE%%/*}" >> "$GITHUB_ENV"
+          set -e
+
+          WRT_DATE_VALUE="$(TZ=UTC-8 date +"%y.%m.%d-%H.%M.%S")"
+          WRT_MARK_VALUE="${GITHUB_REPOSITORY%%/*}"
+          WRT_INFO_VALUE="${WRT_SOURCE%%/*}"
+
+          echo "WRT_DATE=$WRT_DATE_VALUE" >> "$GITHUB_ENV"
+          echo "WRT_MARK=$WRT_MARK_VALUE" >> "$GITHUB_ENV"
+          echo "WRT_INFO=$WRT_INFO_VALUE" >> "$GITHUB_ENV"
 
           if [ -f "./Config/$WRT_CONFIG.txt" ]; then
-            TARGET_NAME="$(grep -m 1 -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' "./Config/$WRT_CONFIG.txt" || true)"
+            TARGET_NAME="$(
+              grep -m 1 -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' \
+                "./Config/$WRT_CONFIG.txt" || true
+            )"
+
             echo "WRT_TARGET=${TARGET_NAME:-unknown}" >> "$GITHUB_ENV"
           else
             echo "WRT_TARGET=unknown" >> "$GITHUB_ENV"
           fi
 
-          MODEL_KEY="$(printf '%s|%s' "$WRT_CONFIG" "$WRT_NAME" | tr '[:upper:]' '[:lower:]' | tr -d ' _-')"
+          MODEL_KEY="$(
+            printf '%s|%s' "$WRT_CONFIG" "$WRT_NAME" \
+              | tr '[:upper:]' '[:lower:]' \
+              | tr -d ' _-'
+          )"
 
           case "$MODEL_KEY" in
             *nn600v1*|*nn6000v1*|*nn6000v2*)
               echo "SKIP_M2AURORA_HOME=true" >> "$GITHUB_ENV"
               ;;
+
             *)
               echo "SKIP_M2AURORA_HOME=false" >> "$GITHUB_ENV"
               ;;
@@ -118,24 +153,53 @@ jobs:
           echo "WRT_KVER=none" >> "$GITHUB_ENV"
           echo "WRT_LIST=none" >> "$GITHUB_ENV"
 
+          echo "Configuration: $WRT_CONFIG"
+          echo "Source: $WRT_SOURCE"
+          echo "Branch: $WRT_BRANCH"
+          echo "Date: $WRT_DATE_VALUE"
+          echo "Target: ${TARGET_NAME:-unknown}"
+
       - name: Clone Code
         run: |
+          set -e
+
           echo "==== Clone OpenWrt Source ===="
-          git clone --depth=1 --single-branch --branch "$WRT_BRANCH" "$WRT_REPO" ./wrt/
+
+          git clone \
+            --depth=1 \
+            --single-branch \
+            --branch "$WRT_BRANCH" \
+            "$WRT_REPO" \
+            ./wrt/
 
           cd ./wrt/
-          echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> "$GITHUB_ENV"
+
+          WRT_HASH_VALUE="$(git log -1 --pretty=format:'%h')"
+          echo "WRT_HASH=$WRT_HASH_VALUE" >> "$GITHUB_ENV"
 
           PROJECT_MIRRORS_FILE="./scripts/projectsmirrors.json"
+
           if [ -f "$PROJECT_MIRRORS_FILE" ]; then
             sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$PROJECT_MIRRORS_FILE"
           fi
 
       - name: Check Scripts
         run: |
+          set -e
+
           echo "==== Convert scripts to Unix format ===="
-          find ./ -maxdepth 5 -type f -iregex ".*\(txt\|sh\|json\|css\|js\|htm\|lua\)$" -exec dos2unix {} \; || true
-          find ./ -maxdepth 5 -type f -iregex ".*\(sh\)$" -exec chmod +x {} \; || true
+
+          find ./ \
+            -maxdepth 5 \
+            -type f \
+            -iregex ".*\(txt\|sh\|json\|css\|js\|htm\|lua\)$" \
+            -exec dos2unix {} \; || true
+
+          find ./ \
+            -maxdepth 5 \
+            -type f \
+            -iregex ".*\(sh\)$" \
+            -exec chmod +x {} \; || true
 
       - name: Check Caches
         id: check-cache
@@ -153,29 +217,45 @@ jobs:
       - name: Update Caches
         if: env.WRT_TEST != 'true'
         run: |
+          set -e
+
           echo "==== Update caches ===="
+
           if [ -d "./wrt/staging_dir" ]; then
-            find "./wrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r DIR; do
-              find "$DIR" -type f -exec touch {} +
-            done
+            find "./wrt/staging_dir" \
+              -type d \
+              -name "stamp" \
+              -not -path "*target*" \
+              | while read -r DIR; do
+                  find "$DIR" -type f -exec touch {} +
+                done
 
             mkdir -p ./wrt/tmp
             echo "1" > ./wrt/tmp/.build
+
             echo "toolchain skipped done!"
           else
             echo "caches missed!"
           fi
 
           if [ "${{ steps.check-cache.outputs.cache-hit }}" != "true" ]; then
-            CACHE_LIST=$(gh cache list --key "$WRT_CONFIG-$WRT_INFO" | cut -f 1 || true)
+            CACHE_LIST="$(
+              gh cache list \
+                --key "$WRT_CONFIG-$WRT_INFO" \
+                | cut -f 1 || true
+            )"
+
             for CACHE_KEY in $CACHE_LIST; do
               gh cache delete "$CACHE_KEY" || true
             done
+
             echo "caches cleanup done!"
           fi
 
       - name: Copy Custom Files
         run: |
+          set -e
+
           echo "==== Copy custom files into OpenWrt rootfs overlay ===="
 
           if [ -d "$GITHUB_WORKSPACE/files" ]; then
@@ -187,7 +267,9 @@ jobs:
           fi
 
           echo "==== Create M2 Aurora LuCI menu file ===="
-          mkdir -p "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d"
+
+          mkdir -p \
+            "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d"
 
           cat > "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d/m2-aurora-home.json" <<'MENUJSON'
           {
@@ -221,7 +303,9 @@ jobs:
           MENUJSON
 
           echo "==== Create redirect page ===="
-          mkdir -p "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more"
+
+          mkdir -p \
+            "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more"
 
           cat > "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm" <<'REDIRECT'
           <%+header%>
@@ -236,7 +320,9 @@ jobs:
           REDIRECT
 
           echo "==== Create M2 Aurora default home script ===="
-          mkdir -p "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults"
+
+          mkdir -p \
+            "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults"
 
           cat > "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home" <<'UCIDEFAULT'
           #!/bin/sh
@@ -247,11 +333,12 @@ jobs:
           uci -q commit luci
 
           CTRL_FILE="/usr/lib/lua/luci/controller/admin/m2more.lua"
+
           if [ -f "$CTRL_FILE" ]; then
               sed -i 's/M2 Aurora 首页/首页/g' "$CTRL_FILE"
           fi
 
-          MENU_DIR="/usr/share/luci/menu.d"
+          MENU_DIR="/usr/share/lua/luci/menu.d"
           BASE_JSON="$MENU_DIR/luci-base.json"
 
           mkdir -p "$MENU_DIR"
@@ -306,59 +393,118 @@ jobs:
           fi
 
           INDEX_LUA="/usr/lib/lua/luci/controller/admin/index.lua"
+
           if [ -f "$INDEX_LUA" ]; then
-              sed -i 's/alias("admin", "status", "overview")/alias("admin", "status", "m2aurora")/g' "$INDEX_LUA"
-              sed -i "s/alias('admin', 'status', 'overview')/alias('admin', 'status', 'm2aurora')/g" "$INDEX_LUA"
-              sed -i 's/firstchild()/alias("admin", "status", "m2aurora")/g' "$INDEX_LUA"
+              sed -i \
+                's/alias("admin", "status", "overview")/alias("admin", "status", "m2aurora")/g' \
+                "$INDEX_LUA"
+
+              sed -i \
+                "s/alias('admin', 'status', 'overview')/alias('admin', 'status', 'm2aurora')/g" \
+                "$INDEX_LUA"
+
+              sed -i \
+                's/firstchild()/alias("admin", "status", "m2aurora")/g' \
+                "$INDEX_LUA"
           fi
 
-          rm -rf /tmp/luci-indexcache /tmp/luci-modulecache /tmp/luci-indexcache.* /tmp/luci-modulecache.* /tmp/luci-*cache* 2>/dev/null || true
+          rm -rf \
+            /tmp/luci-indexcache \
+            /tmp/luci-modulecache \
+            /tmp/luci-indexcache.* \
+            /tmp/luci-modulecache.* \
+            /tmp/luci-*cache* 2>/dev/null || true
 
           exit 0
           UCIDEFAULT
 
-          chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home"
+          chmod +x \
+            "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home"
 
           if [ "$SKIP_M2AURORA_HOME" = "true" ]; then
             echo "==== Remove M2 Aurora home/menu for $WRT_CONFIG / $WRT_NAME ===="
 
-            rm -f "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d/m2-aurora-home.json"
-            rm -f "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm"
-            rm -f "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home"
+            rm -f \
+              "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d/m2-aurora-home.json"
+
+            rm -f \
+              "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm"
+
+            rm -f \
+              "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home"
 
             find "$GITHUB_WORKSPACE/wrt/files" \
               -type f \
-              \( -name "*m2*aurora*.json" -o -name "*aurora*home*.json" \) \
+              \( \
+                -name "*m2*aurora*.json" \
+                -o -name "*aurora*home*.json" \
+              \) \
               -print \
               -delete 2>/dev/null || true
           fi
 
-          chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/"* 2>/dev/null || true
-          chmod +x "$GITHUB_WORKSPACE/wrt/files/etc/init.d/"* 2>/dev/null || true
+          chmod +x \
+            "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/"* \
+            2>/dev/null || true
+
+          chmod +x \
+            "$GITHUB_WORKSPACE/wrt/files/etc/init.d/"* \
+            2>/dev/null || true
 
           echo "==== Custom files copied / generated ===="
-          find "$GITHUB_WORKSPACE/wrt/files" -maxdepth 8 -type f | sort | grep -E 'm2more|m2-aurora|uci-defaults|luci-static' || true
+
+          find "$GITHUB_WORKSPACE/wrt/files" \
+            -maxdepth 8 \
+            -type f \
+            | sort \
+            | grep -E 'm2more|m2-aurora|uci-defaults|luci-static' || true
 
           echo "==== Check M2 Aurora important files ===="
-          ls -l "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/controller/admin/m2more.lua" 2>/dev/null || true
-          ls -l "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/aurora.htm" 2>/dev/null || true
-          ls -l "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm" 2>/dev/null || true
-          ls -l "$GITHUB_WORKSPACE/wrt/files/www/luci-static/m2more/" 2>/dev/null || true
-          ls -l "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d/m2-aurora-home.json" 2>/dev/null || true
-          ls -l "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home" 2>/dev/null || true
+
+          ls -l \
+            "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/controller/admin/m2more.lua" \
+            2>/dev/null || true
+
+          ls -l \
+            "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/aurora.htm" \
+            2>/dev/null || true
+
+          ls -l \
+            "$GITHUB_WORKSPACE/wrt/files/usr/lib/lua/luci/view/m2more/redirect_to_m2aurora.htm" \
+            2>/dev/null || true
+
+          ls -l \
+            "$GITHUB_WORKSPACE/wrt/files/www/luci-static/m2more/" \
+            2>/dev/null || true
+
+          ls -l \
+            "$GITHUB_WORKSPACE/wrt/files/usr/share/luci/menu.d/m2-aurora-home.json" \
+            2>/dev/null || true
+
+          ls -l \
+            "$GITHUB_WORKSPACE/wrt/files/etc/uci-defaults/99-m2-aurora-default-home" \
+            2>/dev/null || true
 
       - name: Update Feeds
         run: |
+          set -e
+
           cd ./wrt/
+
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
       - name: Custom Packages
         run: |
+          set -e
+
           cd ./wrt/package/
 
           echo "==== Fix script permissions ===="
-          chmod +x "$GITHUB_WORKSPACE/Scripts/"*.sh 2>/dev/null || true
+
+          chmod +x \
+            "$GITHUB_WORKSPACE/Scripts/"*.sh \
+            2>/dev/null || true
 
           if [ -f "$GITHUB_WORKSPACE/Scripts/Packages.sh" ]; then
             "$GITHUB_WORKSPACE/Scripts/Packages.sh"
@@ -376,12 +522,17 @@ jobs:
 
       - name: Custom Settings
         run: |
+          set -e
+
           cd ./wrt/
 
           if [[ "${WRT_CONFIG,,}" == *"test"* ]]; then
             cat "$GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt" >> .config
           else
-            cat "$GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt" "$GITHUB_WORKSPACE/Config/GENERAL.txt" >> .config
+            cat \
+              "$GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt" \
+              "$GITHUB_WORKSPACE/Config/GENERAL.txt" \
+              >> .config
           fi
 
           if [ -f "$GITHUB_WORKSPACE/Scripts/Settings.sh" ]; then
@@ -389,6 +540,7 @@ jobs:
           fi
 
           echo "==== Ensure LuCI theme ===="
+
           {
             echo "CONFIG_PACKAGE_luci=y"
             echo "CONFIG_PACKAGE_luci-compat=y"
@@ -400,80 +552,218 @@ jobs:
             fi
           } >> .config
 
-          make defconfig -j$(nproc)
-          make clean -j$(nproc)
+          make defconfig -j"$(nproc)"
+          make clean -j"$(nproc)"
 
       - name: Verify Custom Files Before Build
         run: |
+          set -e
+
           echo "==== Verify wrt/files before build ===="
-          find ./wrt/files -maxdepth 8 -type f | sort | grep -E 'm2more|m2-aurora|uci-defaults|luci-static' || true
+
+          find ./wrt/files \
+            -maxdepth 8 \
+            -type f \
+            | sort \
+            | grep -E 'm2more|m2-aurora|uci-defaults|luci-static' || true
 
           echo "==== Verify custom theme files ===="
-          find ./wrt/package/custom/luci-theme-m2aurora -maxdepth 8 -type f | sort || true
+
+          find ./wrt/package/custom/luci-theme-m2aurora \
+            -maxdepth 8 \
+            -type f \
+            | sort || true
 
           echo "==== Verify LuCI config ===="
+
           cd ./wrt/
-          grep -E 'CONFIG_PACKAGE_luci=|CONFIG_PACKAGE_luci-compat=|CONFIG_PACKAGE_luci-i18n-base-zh-cn=|CONFIG_PACKAGE_luci-theme-aurora=|CONFIG_PACKAGE_luci-theme-m2aurora=' .config || true
+
+          grep -E \
+            'CONFIG_PACKAGE_luci=|CONFIG_PACKAGE_luci-compat=|CONFIG_PACKAGE_luci-i18n-base-zh-cn=|CONFIG_PACKAGE_luci-theme-aurora=|CONFIG_PACKAGE_luci-theme-m2aurora=' \
+            .config || true
 
       - name: Download Packages
         if: env.WRT_TEST != 'true'
         run: |
+          set -e
+
           cd ./wrt/
-          make download -j$(nproc)
+          make download -j"$(nproc)"
 
       - name: Compile Firmware
         if: env.WRT_TEST != 'true'
         run: |
+          set -e
+
           cd ./wrt/
-          make -j$(nproc) || make -j1 V=s
+
+          make -j"$(nproc)" || make -j1 V=s
 
       - name: Machine Information
         run: |
           cd ./wrt/
+
           echo "======================="
           lscpu | grep -E "name|Core|Thread" || true
+
           echo "======================="
           df -h
+
           echo "======================="
           du -h --max-depth=1
+
           echo "======================="
 
       - name: Package Firmware
         run: |
+          set -e
+
           cd ./wrt/
+
           mkdir -p ./upload/
 
-          cp -f ./.config ./upload/Config-"$WRT_CONFIG"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
+          cp -f \
+            ./.config \
+            ./upload/Config-"$WRT_CONFIG"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
 
-          if [[ "$WRT_TEST" != 'true' ]]; then
-            KVER="$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \; | head -n1 || true)"
-            LIST="$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^luci-(app|theme)[^ ]*' {} \; | tr '\n' ' ' || true)"
+          if [[ "$WRT_TEST" != "true" ]]; then
+            KVER="$(
+              find ./bin/targets/ \
+                -type f \
+                -name "*.manifest" \
+                -exec grep -oP '^kernel - \K[\d\.]+' {} \; \
+                | head -n1 || true
+            )"
+
+            LIST="$(
+              find ./bin/targets/ \
+                -type f \
+                -name "*.manifest" \
+                -exec grep -oP '^luci-(app|theme)[^ ]*' {} \; \
+                | tr '\n' ' ' || true
+            )"
 
             echo "WRT_KVER=${KVER:-none}" >> "$GITHUB_ENV"
             echo "WRT_LIST=${LIST:-none}" >> "$GITHUB_ENV"
 
-            find ./bin/targets/ -iregex ".*\(buildinfo\|json\|sha256sums\|packages\)$" -exec rm -rf {} + || true
+            find ./bin/targets/ \
+              -iregex ".*\(buildinfo\|json\|sha256sums\|packages\)$" \
+              -exec rm -rf {} + || true
 
-            for FILE in $(find ./bin/targets/ -type f -iname "*$WRT_TARGET*" || true); do
-              EXT=$(basename "$FILE" | cut -d '.' -f 2-)
-              NAME=$(basename "$FILE" | cut -d '.' -f 1 | grep -io "\($WRT_TARGET\).*" || true)
+            while IFS= read -r -d '' FILE; do
+              FILE_NAME="$(basename "$FILE")"
+              EXT="${FILE_NAME##*.}"
+              BASE_NAME="${FILE_NAME%.*}"
+
+              NAME="$(
+                printf '%s\n' "$BASE_NAME" \
+                  | grep -io "\($WRT_TARGET\).*" \
+                  || true
+              )"
 
               if [ -n "$NAME" ]; then
-                NEW_FILE="$WRT_INFO"-"$WRT_BRANCH"-"$NAME"-"$WRT_DATE"."$EXT"
-                mv -f "$FILE" ./upload/"$NEW_FILE"
+                NEW_FILE="$WRT_INFO-$WRT_BRANCH-$NAME-$WRT_DATE.$EXT"
+                mv -f "$FILE" "./upload/$NEW_FILE"
               fi
-            done
+            done < <(
+              find ./bin/targets/ \
+                -type f \
+                -iname "*$WRT_TARGET*" \
+                -print0
+            )
 
-            find ./bin/targets/ -type f -exec mv -f {} ./upload/ \; || true
-            make clean -j$(nproc)
+            find ./bin/targets/ \
+              -type f \
+              -exec mv -f {} ./upload/ \; || true
+
+            make clean -j"$(nproc)"
           fi
 
+          echo "==== Generated upload files ===="
+
+          find ./upload \
+            -maxdepth 1 \
+            -type f \
+            -printf '%f\n' \
+            | sort
+
+      - name: Prepare Release
+        id: prepare-release
+        if: env.WRT_TEST != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+
+          FILES=()
+
+          for FILE in ./wrt/upload/*; do
+            if [ -f "$FILE" ]; then
+              FILES+=("$FILE")
+            fi
+          done
+
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "::error::No build artifacts found in ./wrt/upload/"
+            echo "Contents of ./wrt/:"
+            find ./wrt \
+              -maxdepth 4 \
+              -type f \
+              | sort \
+              | head -n 300
+            exit 1
+          fi
+
+          RAW_TAG="${WRT_CONFIG}-${WRT_INFO}-${WRT_BRANCH}-${WRT_DATE}"
+
+          TAG="$(
+            printf '%s' "$RAW_TAG" \
+              | tr '[:space:]/' '-' \
+              | sed -E 's/[^A-Za-z0-9._-]+/-/g; s/-+/-/g'
+          )"
+
+          while [[ "$TAG" == *".."* ]]; do
+            TAG="${TAG//../.}"
+          done
+
+          TAG="${TAG#-}"
+          TAG="${TAG#.}"
+          TAG="${TAG%.}"
+          TAG="${TAG%-}"
+
+          if [ -z "$TAG" ]; then
+            echo "::error::Release tag is empty."
+            exit 1
+          fi
+
+          if [[ "$TAG" == *".lock" ]]; then
+            echo "::error::Release tag cannot end with .lock: $TAG"
+            exit 1
+          fi
+
+          if ! git check-ref-format "refs/tags/$TAG"; then
+            echo "::error::Invalid Git tag generated: $TAG"
+            echo "Raw tag: $RAW_TAG"
+            exit 1
+          fi
+
+          echo "Release tag: $TAG"
+          echo "Artifact count: ${#FILES[@]}"
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "has_files=true" >> "$GITHUB_OUTPUT"
+
       - name: Release Firmware
-        if: always()
+        if: >-
+          success() &&
+          env.WRT_TEST != 'true' &&
+          steps.prepare-release.outputs.has_files == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.WRT_CONFIG }}-${{ env.WRT_INFO }}-${{ env.WRT_BRANCH }}-${{ env.WRT_DATE }}
-          files: ./wrt/upload/*.*
+          tag_name: ${{ steps.prepare-release.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: ./wrt/upload/*
           body: |
             这是个平台固件包，内含多个设备！
             请注意选择你需要的设备固件！
