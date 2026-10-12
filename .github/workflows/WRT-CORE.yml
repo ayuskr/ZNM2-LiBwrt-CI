@@ -140,7 +140,7 @@ jobs:
           )"
 
           case "$MODEL_KEY" in
-            *nn600v1*|*nn6000v1*|*nn6000v2*)
+            *zn_m2*|*nn6000v1*|*nn6000v2*)
               echo "SKIP_M2AURORA_HOME=true" >> "$GITHUB_ENV"
               ;;
 
